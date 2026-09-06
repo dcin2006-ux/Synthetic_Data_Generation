@@ -23,20 +23,17 @@ st.write(
 # ============================================================
 
 if "clean_df" in st.session_state:
-
     df = st.session_state["clean_df"].copy()
 
 elif "df" in st.session_state:
-
     df = st.session_state["df"].copy()
 
 else:
-
     st.warning("⚠️ Please upload the dataset first.")
     st.stop()
 
 # ============================================================
-# ORIGINAL DATASET
+# DATASET OVERVIEW
 # ============================================================
 
 st.subheader("📊 Original Dataset")
@@ -46,12 +43,12 @@ col1, col2 = st.columns(2)
 with col1:
     st.metric(
         "Original Records",
-        df.shape[0]
+        f"{df.shape[0]:,}"
     )
 
 with col2:
     st.metric(
-        "Number of Features",
+        "Features",
         df.shape[1]
     )
 
@@ -60,7 +57,7 @@ st.dataframe(
     use_container_width=True
 )
 
-st.write("---")
+st.divider()
 
 # ============================================================
 # CTGAN SETTINGS
@@ -68,25 +65,25 @@ st.write("---")
 
 st.subheader("⚙️ CTGAN Training Settings")
 
+st.info(
+    "💡 To keep the online dashboard stable, CTGAN uses a "
+    "representative sample of up to 5,000 records."
+)
+
 epochs = st.slider(
-    "Select CTGAN Epochs",
+    "CTGAN Epochs",
     min_value=5,
-    max_value=100,
-    value=10,
-    step=5
+    max_value=10,
+    value=5,
+    step=1
 )
 
 num_rows = st.number_input(
     "Number of Synthetic Records",
     min_value=100,
-    max_value=200000,
-    value=10000,
+    max_value=5000,
+    value=5000,
     step=100
-)
-
-st.info(
-    "💡 For faster dashboard execution, CTGAN is trained on "
-    "a representative sample of up to 10,000 records."
 )
 
 st.write("---")
@@ -95,31 +92,36 @@ st.write("---")
 # TRAIN CTGAN
 # ============================================================
 
-if st.button("🚀 Train CTGAN", use_container_width=True):
+if st.button(
+    "🚀 Train CTGAN",
+    use_container_width=True
+):
 
     # --------------------------------------------------------
-    # Select representative training sample
+    # Select a smaller representative sample
     # --------------------------------------------------------
+
+    train_size = min(5000, len(df))
 
     train_df = df.sample(
-        n=min(10000, len(df)),
+        n=train_size,
         random_state=42
-    )
+    ).copy()
 
     st.info(
-        f"CTGAN training sample: {len(train_df):,} records"
+        f"📌 CTGAN will train using {train_size:,} records "
+        f"for {epochs} epochs."
     )
 
     # --------------------------------------------------------
     # Train CTGAN
     # --------------------------------------------------------
 
-    with st.spinner(
-        "🧬 Training CTGAN... Please wait. "
-        "This may take a few minutes."
-    ):
+    try:
 
-        try:
+        with st.spinner(
+            "🧬 Training CTGAN... Please wait."
+        ):
 
             ctgan = CTGAN(
                 epochs=epochs
@@ -127,65 +129,78 @@ if st.button("🚀 Train CTGAN", use_container_width=True):
 
             ctgan.fit(train_df)
 
-            st.success(
-                "✅ CTGAN Model Trained Successfully!"
-            )
+        st.success(
+            "✅ CTGAN Model Trained Successfully!"
+        )
 
-            # Save model in Streamlit session
-            st.session_state["ctgan_model"] = ctgan
+        # Save model
+        st.session_state["ctgan_model"] = ctgan
 
-        except Exception as e:
+    except Exception as e:
 
-            st.error(
-                "❌ CTGAN training failed."
-            )
+        st.error(
+            "❌ CTGAN training could not be completed."
+        )
 
-            st.exception(e)
+        st.warning(
+            "The deployed server may not have enough "
+            "resources for CTGAN training."
+        )
 
-            st.stop()
+        st.code(
+            str(e)
+        )
 
-    st.write("---")
+        st.stop()
+
+    st.divider()
 
     # ========================================================
     # GENERATE SYNTHETIC DATA
     # ========================================================
 
-    st.subheader("🧬 Generating Synthetic Dataset")
+    st.subheader(
+        "🧬 Generating Synthetic Dataset"
+    )
 
-    with st.spinner(
-        "Generating synthetic patient records..."
-    ):
+    try:
 
-        try:
+        with st.spinner(
+            "Generating synthetic records..."
+        ):
 
             synthetic_df = ctgan.sample(
                 int(num_rows)
             )
 
-            # Save synthetic dataset
-            st.session_state["synthetic_df"] = synthetic_df
+        # Save synthetic dataset
+        st.session_state["synthetic_df"] = synthetic_df
 
-            st.success(
-                "✅ Synthetic Dataset Generated Successfully!"
-            )
+        st.success(
+            "✅ Synthetic Dataset Generated Successfully!"
+        )
 
-        except Exception as e:
+    except Exception as e:
 
-            st.error(
-                "❌ Synthetic data generation failed."
-            )
+        st.error(
+            "❌ Synthetic data generation failed."
+        )
 
-            st.exception(e)
+        st.code(
+            str(e)
+        )
 
-            st.stop()
+        st.stop()
 
-    st.write("---")
+    st.divider()
 
     # ========================================================
     # SYNTHETIC DATA PREVIEW
     # ========================================================
 
-    st.subheader("🔬 Synthetic Dataset Preview")
+    st.subheader(
+        "🔬 Synthetic Dataset Preview"
+    )
 
     st.dataframe(
         synthetic_df.head(10),
@@ -197,44 +212,45 @@ if st.button("🚀 Train CTGAN", use_container_width=True):
         synthetic_df.shape
     )
 
-    st.write("---")
+    st.divider()
 
     # ========================================================
     # DATASET COMPARISON
     # ========================================================
 
-    st.subheader("📊 Dataset Comparison")
+    st.subheader(
+        "📊 Dataset Comparison"
+    )
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-
         st.metric(
             "Original Records",
             f"{df.shape[0]:,}"
         )
 
     with col2:
-
         st.metric(
-            "Training Records",
-            f"{len(train_df):,}"
+            "CTGAN Training Records",
+            f"{train_size:,}"
         )
 
     with col3:
-
         st.metric(
             "Synthetic Records",
             f"{synthetic_df.shape[0]:,}"
         )
 
-    st.write("---")
+    st.divider()
 
     # ========================================================
     # SYNTHETIC DATA INFORMATION
     # ========================================================
 
-    st.subheader("📋 Synthetic Dataset Information")
+    st.subheader(
+        "📋 Synthetic Dataset Information"
+    )
 
     info_df = pd.DataFrame({
         "Column": synthetic_df.columns,
@@ -251,40 +267,43 @@ if st.button("🚀 Train CTGAN", use_container_width=True):
         use_container_width=True
     )
 
-    st.write("---")
+    st.divider()
 
     # ========================================================
-    # DOWNLOAD SYNTHETIC DATASET
+    # DOWNLOAD SYNTHETIC DATA
     # ========================================================
 
-    st.subheader("⬇️ Download Synthetic Dataset")
+    st.subheader(
+        "⬇️ Download Synthetic Dataset"
+    )
 
-    csv = synthetic_df.to_csv(
+    synthetic_csv = synthetic_df.to_csv(
         index=False
     ).encode("utf-8")
 
     st.download_button(
         label="📥 Download Synthetic CSV",
-        data=csv,
+        data=synthetic_csv,
         file_name="synthetic_dataset.csv",
         mime="text/csv",
         use_container_width=True
     )
 
-    st.write("---")
+    st.divider()
 
     # ========================================================
-    # COMPLETION MESSAGE
+    # COMPLETION
     # ========================================================
 
     st.success(
-        "🎉 Synthetic data generation completed successfully!"
+        "🎉 Synthetic Data Generation Completed Successfully!"
     )
 
     st.info(
-        "The generated dataset can now be examined in the "
-        "Validation and Results sections."
+        "The generated synthetic dataset is now available "
+        "for validation and downstream analysis."
     )
+
 
 # ============================================================
 # SHOW PREVIOUSLY GENERATED DATA
@@ -292,7 +311,7 @@ if st.button("🚀 Train CTGAN", use_container_width=True):
 
 elif "synthetic_df" in st.session_state:
 
-    st.write("---")
+    st.divider()
 
     st.subheader(
         "📦 Previously Generated Synthetic Dataset"
@@ -310,13 +329,13 @@ elif "synthetic_df" in st.session_state:
         synthetic_df.shape
     )
 
-    csv = synthetic_df.to_csv(
+    synthetic_csv = synthetic_df.to_csv(
         index=False
     ).encode("utf-8")
 
     st.download_button(
         label="📥 Download Synthetic CSV",
-        data=csv,
+        data=synthetic_csv,
         file_name="synthetic_dataset.csv",
         mime="text/csv",
         use_container_width=True
